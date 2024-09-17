@@ -1,4 +1,4 @@
-# fp-2024
+# Deck of cards fp-2024
 
 ## Setup
 
