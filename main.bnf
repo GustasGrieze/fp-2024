@@ -1,0 +1,15 @@
+<command> ::= <viewDeck> | <addDeck> | <deleteDeck> | <countDeck> | <drawCard> | <shuffleDeck>
+
+<viewDeck> ::= "view"
+<addDeck> ::= "add" <deck>
+<deleteDeck> ::= "delete"
+<countDeck> ::= "count"
+<drawCard> ::= "draw"
+<shuffleDeck> ::= "shuffle"
+
+<deck> ::= <card> | <card> ", " <deck>
+<card> ::= <rank> "of" <suit> | "Joker"
+
+<rank> ::= <number> | "Jack" | "Queen" | "King" | "Ace"
+<number> ::= "Two" | "Three" | "Four" | "Five" | "Six" | "Seven" | "Eight" | "Nine" | "Ten"
+<suit> ::= "Hearts" | "Diamonds" | "Clubs" | "Spades"
