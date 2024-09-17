@@ -1,0 +1,26 @@
+<command> ::= <add_collection>
+            | <add_book>
+            | <remove_collection>
+            | <remove_book>
+            | <list_contents>
+            | <exit_command>
+
+<add_collection> ::= "add" "collection" <collection_name> [ "to" <parent_collection> ]
+<remove_collection> ::= "remove" "collection" <collection_name>
+<add_book> ::= "add" "book" <book_id> <book_title> [ "to" <collection_name> ]
+<remove_book> ::= "remove" "book" <book_id>
+<list_contents> ::= "list" [ "collection" <collection_name> ] | "list" "all"
+<exit_command> ::= "exit" | "quit"
+
+<collection_name> ::= <identifier> [ "/" <collection_name> ]
+<parent_collection> ::= <collection_name>
+<book_id> ::= <identifier>
+<book_title> ::= <quoted_string>
+
+<identifier> ::= <letter> { <letter_or_digit> }
+<quoted_string> ::= '"' { <any_character_except_quote> } '"'
+
+<letter> ::= "A" | "B" | "C" | ... | "Z" | "a" | "b" | "c" | ... | "z"
+<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+<letter_or_digit> ::= <letter> | <digit>
+<any_character_except_quote> ::= any character except '"'
