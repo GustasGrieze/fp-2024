@@ -1,4 +1,4 @@
-# fp-2024
+# fp-2024 | Library
 
 ## Setup
 
