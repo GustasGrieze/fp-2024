@@ -2,10 +2,15 @@
 module Main (main) where
 
 import Control.Concurrent.Chan
-import Control.Concurrent.STM(TVar, newTVarIO)
+import Control.Concurrent.STM (TVar, newTVarIO)
 import Control.Monad.IO.Class ()
 import Control.Monad.State.Strict
-    ( MonadIO(liftIO), evalStateT, StateT, get, lift)
+  ( MonadIO (liftIO),
+    evalStateT,
+    StateT,
+    get,
+    lift,
+  )
 import Data.List qualified as L
 import Lib1 qualified
 import Lib2 qualified
@@ -21,7 +26,8 @@ import System.Console.Repline
   )
 import Control.Concurrent (forkIO)
 
-type Repl a = HaskelineT (StateT (TVar Lib2.State, Chan Lib3.StorageOp) IO) a
+-- Update the type alias to use ProgramState
+type Repl a = HaskelineT (StateT (TVar Lib3.ProgramState, Chan Lib3.StorageOp) IO) a
 
 final :: Repl ExitDecision
 final = do
@@ -54,7 +60,7 @@ invite MultiLine = pure "| "
 main :: IO ()
 main = do
   chan <- newChan :: IO (Chan Lib3.StorageOp)
-  state <- newTVarIO Lib2.emptyState
+  state <- newTVarIO (Lib3.ProgramState Lib2.emptyState [])
   _ <- forkIO $ Lib3.storageOpLoop chan
   evalStateT (evalRepl invite cmd [] (Just ':') (Just "paste") (Word completer) ini final)
-    (state, chan) 
+    (state, chan)

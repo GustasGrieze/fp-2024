@@ -1,4 +1,4 @@
-<command> ::= <viewDeck> | <addDeck> | <deleteDeck> | <countDeck> | <drawCard> | <shuffleDeck>
+<command> ::= <viewDeck> | <addDeck> | <deleteDeck> | <countDeck> | <drawCard> | <shuffleDeck> | "save" | "load"
 
 <viewDeck> ::= "view"
 <addDeck> ::= "add" <deck>

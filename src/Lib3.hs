@@ -1,4 +1,5 @@
 {-# LANGUAGE InstanceSigs #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 module Lib3
     ( stateTransition,
     StorageOp (..),
@@ -6,68 +7,158 @@ module Lib3
     parseCommand,
     parseStatements,
     marshallState,
-    renderStatements
+    renderStatements,
+    Parser(..),
+    Statements(..),
+    Command(..),
+    ProgramState(..)
     ) where
 
-import Control.Concurrent ( Chan )
-import Control.Concurrent.STM(STM, TVar)
+import Control.Concurrent
+import Control.Concurrent.STM
+import Control.Applicative
+import Control.Monad (forever)
+
 import qualified Lib2
+import Parser
 
 data StorageOp = Save String (Chan ()) | Load (Chan String)
--- | This function is started from main
--- in a dedicated thread. It must be used to control
--- file access in a synchronized manner: read requests
--- from chan, do the IO operations needed and respond
--- to a channel provided in a request.
--- Modify as needed.
+
 storageOpLoop :: Chan StorageOp -> IO ()
-storageOpLoop _ = do
-  return $ error "Not implemented 1"
+storageOpLoop chan = forever $ do
+    op <- readChan chan
+    case op of
+        Save content respondChan -> do
+            writeFile "state.txt" content
+            writeChan respondChan ()
+        Load respondChan -> do
+            content <- readFile "state.txt"
+            writeChan respondChan content
+
+data ProgramState = ProgramState {
+  deckState :: Lib2.State,
+  commandHistory :: [Lib2.Query]
+}
 
 data Statements = Batch [Lib2.Query] |
                Single Lib2.Query
-               deriving (Show, Eq)
+               deriving (Eq)
+
+instance Show Statements where
+  show :: Statements -> String
+  show (Single q) = showQuery q
+  show (Batch qs) = "START\n" ++ concatMap ((++ ";\n") . showQuery) qs ++ "FINISH\n"
+
+showQuery :: Lib2.Query -> String
+showQuery Lib2.ViewDeck = "view"
+showQuery (Lib2.AddDeck deck) = "add " ++ show deck
+showQuery Lib2.DeleteDeck = "delete"
+showQuery Lib2.CountDeck = "count"
+showQuery Lib2.DrawCard = "draw"
+showQuery Lib2.ShuffleDeck = "shuffle"
 
 data Command = StatementCommand Statements |
                LoadCommand |
                SaveCommand
                deriving (Show, Eq)
 
--- | Parses user's input.
 parseCommand :: String -> Either String (Command, String)
-parseCommand _ = Left "Not implemented 2"
+parseCommand = runParser command
 
--- | Parses Statement.
--- Must be used in parseCommand.
--- Reuse Lib2 as much as you can.
--- You can change Lib2.parseQuery signature if needed.
-parseStatements :: String -> Either String (Statements, String)
-parseStatements _ = Left "Not implemented 3"
+command :: Parser Command
+command =
+  (do
+    StatementCommand <$> parseStatements
+  )
+  <|> parseSave
+  <|> parseLoad
 
--- | Converts program's state into Statements
--- (probably a batch, but might be a single query)
-marshallState :: Lib2.State -> Statements
-marshallState _ = error "Not implemented 4"
+parseSave :: Parser Command
+parseSave = do
+  _ <- parseString "save"
+  return SaveCommand
 
--- | Renders Statements into a String which
--- can be parsed back into Statements by parseStatements
--- function. The String returned by this function must be used
--- as persist program's state in a file. 
--- Must have a property test
--- for all s: parseStatements (renderStatements s) == Right(s, "")
+parseLoad :: Parser Command
+parseLoad = do
+  _ <- parseString "load"
+  return LoadCommand
+
+parseStatements :: Parser Statements
+parseStatements =
+  (do
+    _ <- parseString "START\n"
+    qs <- many (do
+                  q <- Lib2.parseQuery'
+                  _ <- parseString ";\n"
+                  return q
+                )
+    _ <- parseString "FINISH\n"
+    return (Batch qs)
+  )
+  <|> (do
+    Single <$> Lib2.parseQuery'
+  )
+
+marshallState :: ProgramState -> Statements
+marshallState (ProgramState _ commands) =
+  if null commands
+    then Single Lib2.DeleteDeck
+    else Batch commands
+
 renderStatements :: Statements -> String
-renderStatements _ = error "Not implemented 5"
+renderStatements = show
 
--- | Updates a state according to a command.
--- Performs file IO via ioChan if needed.
--- This allows your program to share the state
--- between repl iterations, save the state to a file,
--- load the state from the file so the state is preserved
--- between program restarts.
--- Keep IO as small as possible.
--- State update must be executed atomically (STM).
--- Right contains an optional message to print, updated state
--- is stored in transactinal variable
-stateTransition :: TVar Lib2.State -> Command -> Chan StorageOp ->
+stateTransition :: TVar ProgramState -> Command -> Chan StorageOp ->
                    IO (Either String (Maybe String))
-stateTransition _ _ ioChan = return $ Left "Not implemented 6"
+stateTransition stateVar SaveCommand ioChan = do
+  currentProgramState <- readTVarIO stateVar
+  resultChan <- newChan
+  writeChan ioChan (Save (renderStatements $ marshallState currentProgramState) resultChan)
+  _ <- readChan resultChan
+  return $ Right $ Just "State saved."
+
+stateTransition stateVar LoadCommand ioChan = do
+  resultChan <- newChan
+  writeChan ioChan (Load resultChan)
+  dataString <- readChan resultChan
+  case runParser parseStatements dataString of
+    Left parseErr -> return $ Left $ "Load failed:\n" ++ parseErr
+    Right (parsedCmds, _) -> atomically $ do
+      writeTVar stateVar (ProgramState Lib2.emptyState [])
+      processStatements stateVar parsedCmds
+
+stateTransition stateVar (StatementCommand cmds) _ = atomically $ processStatements stateVar cmds
+
+processQueries :: Lib2.State -> [Lib2.Query] -> Either String (Maybe String, Lib2.State)
+processQueries state [] = Right (Nothing, state)
+processQueries state (q:qs) = case Lib2.stateTransition state q of
+  Left err -> Left err
+  Right (msg, newState) ->
+    case processQueries newState qs of
+      Left err' -> Left err'
+      Right (msg', finalState) ->
+        let combinedMsg = case (msg, msg') of
+                            (Just m1, Just m2) -> Just (m1 ++ "\n" ++ m2)
+                            (Just m1, Nothing) -> Just m1
+                            (Nothing, Just m2) -> Just m2
+                            (Nothing, Nothing) -> Nothing
+        in Right (combinedMsg, finalState)
+
+processStatements :: TVar ProgramState -> Statements -> STM (Either String (Maybe String))
+processStatements stateVar (Batch cmds) = do
+  ProgramState currentState cmdHistory <- readTVar stateVar
+  case processQueries currentState cmds of
+    Left err -> return $ Left err
+    Right (msg, updatedState) -> do
+      let newCmdHistory = cmdHistory ++ cmds
+      writeTVar stateVar (ProgramState updatedState newCmdHistory)
+      return $ Right msg
+
+processStatements stateVar (Single cmd) = do
+  ProgramState currentState cmdHistory <- readTVar stateVar
+  case Lib2.stateTransition currentState cmd of
+    Left err -> return $ Left err
+    Right (msg, updatedState) -> do
+      let newCmdHistory = cmdHistory ++ [cmd]
+      writeTVar stateVar (ProgramState updatedState newCmdHistory)
+      return $ Right msg

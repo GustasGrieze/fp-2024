@@ -1,0 +1,16 @@
+START
+add Ace of Hearts;
+add King of Hearts;
+add Queen of Hearts;
+add Jack of Hearts;
+add Ten of Hearts;
+view;
+count;
+draw;
+view;
+add Ten of Hearts;
+view;
+shuffle;
+view;
+view;
+FINISH

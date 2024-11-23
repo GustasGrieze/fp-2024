@@ -3,6 +3,7 @@
 
 {-# HLINT ignore "Redundant lambda" #-}
 {-# HLINT ignore "Use newtype instead of data" #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Lib2
     (Query(..),
@@ -19,12 +20,16 @@ module Lib2
     parseDeck,
     countCards,
     removeTopCard,
-    shuffleDeck
+    shuffleDeck,
+    convertParser,
+    parseQuery'
     )
 where
 
+import Control.Applicative (Alternative ((<|>)))
 import qualified Data.Char as C
 import qualified Data.List as L
+import qualified Parser as P
 
 data Number = Two | Three | Four | Five | Six | Seven | Eight | Nine | Ten
   deriving (Show, Eq)
@@ -105,7 +110,6 @@ parseWord typeName wordList input =
             Nothing    -> Left $ letters++" is not a "++typeName
         else Left $ input ++ " does not start with a letter"
 
--- <suit> ::= "Hearts" | "Diamonds" | "Clubs" | "Spades"
 parseSuit :: Parser Suit
 parseSuit = parseWord "Suit" [
     ("Hearts", Hearts),
@@ -114,7 +118,6 @@ parseSuit = parseWord "Suit" [
     ("Spades", Spades)
   ]
 
--- <number> ::= "Two" | "Three" | "Four" | "Five" | "Six" | "Seven" | "Eight" | "Nine" | "Ten"
 parseNumber :: Parser Number
 parseNumber = parseWord "Number" [
     ("Two", Two),
@@ -128,7 +131,6 @@ parseNumber = parseWord "Number" [
     ("Ten", Ten)
   ]
 
--- <rank> ::= <number> | "Jack" | "Queen" | "King" | "Ace"
 parseRank :: Parser Rank
 parseRank = orX [parseNumberAsRank, parseFaceCard]
   where
@@ -145,7 +147,6 @@ parseRank = orX [parseNumberAsRank, parseFaceCard]
             Right (number, rest) -> Right (RankNumber number, rest)
             Left err -> Left err
 
--- <card> ::= <rank> "of" <suit> | "Joker"
 parseCard :: Parser Card
 parseCard = orX [and2s Card parseRank (parseString " of ") parseSuit, parseJoker]
   where
@@ -165,7 +166,6 @@ and3 w mrg a strParser b = \input ->
                 Left eStr -> Left eStr
         Left e1 -> Left e1
 
--- <deck> ::= <card> "," <deck> | <card> 
 parseDeck :: Parser Deck
 parseDeck = orX[and3 SingleCard mergeDecks parseCard (parseString ", ") parseDeck,parseSingleDeck]
   where 
@@ -177,7 +177,6 @@ parseDeck = orX[and3 SingleCard mergeDecks parseCard (parseString ", ") parseDec
 data Query = ViewDeck | AddDeck Deck | DeleteDeck | CountDeck | DrawCard | ShuffleDeck
   deriving (Show, Eq)
 
--- <viewDeck> ::= "view"
 parseView :: Parser Query
 parseView input =
   case parseString "view" input of
@@ -187,7 +186,6 @@ parseView input =
           else Left "Expected only whitespace after 'view'"
       _ -> Left "Expected 'view'"
 
--- <deleteDeck> ::= "delete"
 parseDeleteDeck :: Parser Query
 parseDeleteDeck input =
   case parseString "delete" input of
@@ -197,7 +195,6 @@ parseDeleteDeck input =
         else Left "Expected only whitespace after 'delete'"
     _ -> Left "Expected 'delete'"
 
--- <addDeck> ::= "add" <deck>
 parseAddDeck :: Parser Query
 parseAddDeck = and2 (\_ deck -> AddDeck deck) (parseString "add ") parseAdd
   where
@@ -254,7 +251,6 @@ removeTopCard :: Deck -> (Card, Maybe Deck)
 removeTopCard (SingleCard card) = (card, Nothing)
 removeTopCard (Deck card rest) = (card, Just rest)
 
--- Corrected interleave function
 interleave :: [Card] -> [Card] -> [Card]
 interleave [] ys = ys
 interleave xs [] = xs
@@ -321,3 +317,39 @@ stateTransition (State maybeDeck) query = case query of
 mergeDecks :: Deck -> Deck -> Deck
 mergeDecks (SingleCard card) existingDeck = Deck card existingDeck
 mergeDecks (Deck card restOfDeck) existingDeck = Deck card (mergeDecks restOfDeck existingDeck)
+
+convertParser :: Parser a -> P.Parser a
+convertParser p= P.Parser {P.runParser = p}
+parseQuery' :: P.Parser Query
+parseQuery' =
+   parseView'
+    <|> parseDeleteDeck'
+    <|> parseAddDeck'
+    <|> parseCountDeck'
+    <|> parseDrawCard'
+    <|> parseShuffleDeck'
+parseView' :: P.Parser Query
+parseView' = do
+  _ <- P.parseString "view"
+  return ViewDeck
+parseDeleteDeck' :: P.Parser Query
+parseDeleteDeck' = do
+  _ <- P.parseString "delete"
+  return DeleteDeck
+parseAddDeck' :: P.Parser Query
+parseAddDeck' = do
+  _ <- P.parseString "add "
+  deck <- convertParser parseDeck
+  return (AddDeck deck)
+parseCountDeck' :: P.Parser Query
+parseCountDeck' = do
+  _ <- P.parseString "count"
+  return CountDeck
+parseDrawCard' :: P.Parser Query
+parseDrawCard' = do
+  _ <- P.parseString "draw"
+  return DrawCard
+parseShuffleDeck' :: P.Parser Query
+parseShuffleDeck' = do
+  _ <- P.parseString "shuffle"
+  return ShuffleDeck

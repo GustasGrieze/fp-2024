@@ -1,77 +1,18 @@
->>> add Queen of Hearts
-Card added.
-
 >>> view
-Queen of Hearts
-
->>> add Jack of Spades
-Card added.
-
->>> view
-Jack of Spades, Queen of Hearts
-
->>> add King of Hearts
-Card added.
-
->>> add Jack of Hearts
-Card added.
-
->>> view
-Jack of Hearts, King of Hearts, Jack of Spades, Queen of Hearts
-
->>> shuffle
-Deck shuffled.
-
->>> view
-Jack of Hearts, Jack of Spades, King of Hearts, Queen of Hearts
-
->>> draw
-You drew: Jack of Hearts
-
->>> view
-Jack of Spades, King of Hearts, Queen of Hearts
-
->>> count
-Number of cards in the deck: 3
-
+The deck is empty.
 >>> add Two of Hearts
 Card added.
-
->>> add Three of Diamonds
-Card added.
-
 >>> view
-Three of Diamonds, Two of Hearts, Jack of Spades, King of Hearts, Queen of Hearts
-
->>> shuffle
-Deck shuffled.
-
+Two of Hearts
+>>> add Three of Diamonds, Jack of Clubs
+Deck added.
 >>> view
-Three of Diamonds, Jack of Spades, Two of Hearts, King of Hearts, Queen of Hearts
-
->>> count
-Number of cards in the deck: 5
-
->>> draw
-You drew: Three of Diamonds
-
->>> view
-Jack of Spades, Two of Hearts, King of Hearts, Queen of Hearts
-
->>> count
-Number of cards in the deck: 4
-
+Three of Diamonds, Jack of Clubs, Two of Hearts
 >>> delete
 Deck deleted.
-
 >>> view
 The deck is empty.
-
->>> shuffle
-The deck is empty. Cannot shuffle an empty deck.
-
->>> count
-The deck is empty.
-
->>> draw
-The deck is empty.
+>>> add Joker
+Card added.
+>>> view
+Joker
