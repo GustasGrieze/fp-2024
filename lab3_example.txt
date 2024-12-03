@@ -56,3 +56,21 @@ Card added.
 Ten of Hearts, Jack of Hearts, Queen of Hearts, King of Hearts, Ace of Hearts
 Deck shuffled.
 Ten of Hearts, Queen of Hearts, Jack of Hearts, King of Hearts, Ace of Hearts
+
+
+START
+add Ace of Hearts;
+add King of Hearts;
+add Queen of Hearts;
+add Jack of Hearts;
+add Ten of Hearts;
+view;
+count;
+draw;
+view;
+add Ten of Hearts;
+view;
+shuffle;
+view;
+view;
+FINISH
