@@ -2,25 +2,29 @@
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 module Lib3
     ( stateTransition,
-    StorageOp (..),
-    storageOpLoop,
-    parseCommand,
-    parseStatements,
-    marshallState,
-    renderStatements,
-    Parser(..),
-    Statements(..),
-    Command(..),
-    ProgramState(..)
+      StorageOp (..),
+      storageOpLoop,
+      parseCommand,
+      parseStatements,
+      marshallState,
+      renderStatements,
+      Statements(..),
+      Command(..),
+      ProgramState(..)
     ) where
 
+import Control.Applicative (many, (<|>))
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Applicative
 import Control.Monad (forever)
 
 import qualified Lib2
-import Parser
+import Parsers
+
+data ProgramState = ProgramState {
+  deckState :: Lib2.State,
+  commandHistory :: [Lib2.Query]
+}
 
 data StorageOp = Save String (Chan ()) | Load (Chan String)
 
@@ -35,13 +39,8 @@ storageOpLoop chan = forever $ do
             content <- readFile "state.txt"
             writeChan respondChan content
 
-data ProgramState = ProgramState {
-  deckState :: Lib2.State,
-  commandHistory :: [Lib2.Query]
-}
-
 data Statements = Batch [Lib2.Query] |
-               Single Lib2.Query
+                  Single Lib2.Query
                deriving (Eq)
 
 instance Show Statements where
@@ -62,14 +61,17 @@ data Command = StatementCommand Statements |
                SaveCommand
                deriving (Show, Eq)
 
+-- | Parses user's input.
 parseCommand :: String -> Either String (Command, String)
-parseCommand = runParser command
+parseCommand input =
+    let (result, rest) = parse command input
+    in case result of
+        Right cmd -> Right (cmd, rest)
+        Left err -> Left err
 
 command :: Parser Command
 command =
-  (do
-    StatementCommand <$> parseStatements
-  )
+  (StatementCommand <$> parseStatements)
   <|> parseSave
   <|> parseLoad
 
@@ -83,37 +85,42 @@ parseLoad = do
   _ <- parseString "load"
   return LoadCommand
 
+-- | Parses Statement.
 parseStatements :: Parser Statements
 parseStatements =
-  (do
-    _ <- parseString "START\n"
-    qs <- many (do
-                  q <- Lib2.parseQuery'
-                  _ <- parseString ";\n"
-                  return q
-                )
-    _ <- parseString "FINISH\n"
-    return (Batch qs)
+  ( do
+      _ <- parseString "START\n"
+      q <-
+        many
+          ( do
+              q <- parseView <|> parseDelete <|> parseAddDeck <|> parseCount <|> parseDraw <|> parseShuffle
+              _ <- parseString ";\n"
+              return q
+          )
+      _ <- parseString "FINISH\n"
+      return $ Batch q
   )
-  <|> (do
-    Single <$> Lib2.parseQuery'
-  )
+    <|> (Single <$> (parseView <|> parseDelete <|> parseAddDeck <|> parseCount <|> parseDraw <|> parseShuffle))
 
-marshallState :: ProgramState -> Statements
-marshallState (ProgramState _ commands) =
-  if null commands
-    then Single Lib2.DeleteDeck
-    else Batch commands
+-- | Convert program's state into Statements
+marshallState :: Lib2.State -> Statements
+marshallState (Lib2.State maybeDeck) =
+  case maybeDeck of
+    Nothing -> Single Lib2.DeleteDeck
+    Just deck -> Batch [Lib2.DeleteDeck, Lib2.AddDeck deck]
 
+-- | Renders Statements into a String for saving/loading
 renderStatements :: Statements -> String
 renderStatements = show
 
+-- | State transitions with IO channel for save/load
 stateTransition :: TVar ProgramState -> Command -> Chan StorageOp ->
                    IO (Either String (Maybe String))
 stateTransition stateVar SaveCommand ioChan = do
   currentProgramState <- readTVarIO stateVar
+  let ps = deckState currentProgramState
   resultChan <- newChan
-  writeChan ioChan (Save (renderStatements $ marshallState currentProgramState) resultChan)
+  writeChan ioChan (Save (renderStatements $ marshallState ps) resultChan)
   _ <- readChan resultChan
   return $ Right $ Just "State saved."
 
@@ -121,28 +128,32 @@ stateTransition stateVar LoadCommand ioChan = do
   resultChan <- newChan
   writeChan ioChan (Load resultChan)
   dataString <- readChan resultChan
-  case runParser parseStatements dataString of
+  let (parseResult, _) = parse parseStatements dataString
+  case parseResult of
     Left parseErr -> return $ Left $ "Load failed:\n" ++ parseErr
-    Right (parsedCmds, _) -> atomically $ do
+    Right parsedCmds -> atomically $ do
       writeTVar stateVar (ProgramState Lib2.emptyState [])
       processStatements stateVar parsedCmds
 
 stateTransition stateVar (StatementCommand cmds) _ = atomically $ processStatements stateVar cmds
 
 processQueries :: Lib2.State -> [Lib2.Query] -> Either String (Maybe String, Lib2.State)
-processQueries state [] = Right (Nothing, state)
-processQueries state (q:qs) = case Lib2.stateTransition state q of
-  Left err -> Left err
-  Right (msg, newState) ->
-    case processQueries newState qs of
-      Left err' -> Left err'
-      Right (msg', finalState) ->
-        let combinedMsg = case (msg, msg') of
-                            (Just m1, Just m2) -> Just (m1 ++ "\n" ++ m2)
-                            (Just m1, Nothing) -> Just m1
-                            (Nothing, Just m2) -> Just m2
-                            (Nothing, Nothing) -> Nothing
-        in Right (combinedMsg, finalState)
+processQueries state [] = Left "No queries to process"
+processQueries state (q:qs) =
+  case Lib2.stateTransition state q of
+    Left err -> Left err
+    Right (msg, newState) ->
+      if null qs
+      then Right (msg, newState)
+      else case processQueries newState qs of
+        Left err' -> Left err'
+        Right (msg', finalState) ->
+          let combinedMsg = case (msg, msg') of
+                              (Just m1, Just m2) -> Just (m1 ++ "\n" ++ m2)
+                              (Just m1, Nothing) -> Just m1
+                              (Nothing, Just m2) -> Just m2
+                              (Nothing, Nothing) -> Nothing
+          in Right (combinedMsg, finalState)
 
 processStatements :: TVar ProgramState -> Statements -> STM (Either String (Maybe String))
 processStatements stateVar (Batch cmds) = do

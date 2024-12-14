@@ -1,0 +1,50 @@
+stack run fp2024-four-client single
+Running with HTTP single request per command:
+Sending request: add Two of Hearts, Ace of Spades
+Sending request: count
+Sending request: shuffle
+Sending request: draw
+Sending request: delete
+Sending request: view
+
+server:
+Request was: add Two of Hearts, Ace of Spades
+Request was: count
+Request was: shuffle
+Request was: draw
+Request was: delete
+Request was: view
+
+stack run fp2024-four-client memory
+Running with in-memory interpreter for testing:
+Final in-memory state:
+State Nothing
+
+stack run fp2024-four-client batch
+Running with HTTP batch requests:
+Sending batch request:
+add Two of Hearts, Ace of Spades
+count
+shuffle
+draw
+delete
+Sending request: view
+
+stack run fp2024-four-client batch
+Running with HTTP batch requests:
+Sending batch request:
+add Two of Hearts, Ace of Spades
+count
+shuffle
+draw
+delete
+Sending request: view
+
+server:
+Request was: add Two of Hearts, Ace of Spades
+count
+shuffle
+draw
+delete
+
+Request was: view
