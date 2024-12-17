@@ -48,3 +48,34 @@ draw
 delete
 
 Request was: view
+
+stack run fp2024-four-client memory
+Running with in-memory interpreter for testing:
+Final in-memory state:
+State Nothing
+
+
+Other scenario:
+
+stack run fp2024-four-client batch
+Running with HTTP batch requests:
+Sending batch request:
+add Two of Hearts, Ace of Spades
+count
+shuffle
+draw
+
+Sending request: view
+
+server:
+Request was: add Two of Hearts, Ace of Spades
+count
+shuffle
+draw
+
+Request was: view
+
+stack run fp2024-four-client memory
+Running with in-memory interpreter for testing:
+Final in-memory state:
+State (Just Ace of Spades)
